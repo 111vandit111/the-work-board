@@ -83,8 +83,8 @@ export default function Home() {
     if(!canvas) return;
     const ctx = canvas.getContext("2d");
     if(!ctx) return;
-    const data = canvas.toDataURL("image/jpeg").replace(/^data:image\/jpeg;base64,/, "");;
-    gemeniResponse({ image : data, arrayOfString : array , key : process.env.GEMINI_API || ""}).then((res) => {
+    const data = canvas.toDataURL("image/jpeg").replace(/^data:image\/jpeg;base64,/, "");
+    gemeniResponse({ image : data, arrayOfString : array , key : process.env.NEXT_PUBLIC_GEMINI_API || ""}).then((res) => {
       const resp = res.response;
       setIsFetching(false);
       const finalResult : any = [];
@@ -123,7 +123,7 @@ export default function Home() {
                {
                  Object.keys(result[key]).map((item : any , index : number) => {
                    return (
-                     <div key={index} className="mt-2" onClick={() => console.log(result[key])}>
+                     <div key={index} className="mt-2">
                        <p>{item} = {result[key][item]}</p>
                      </div>
                    )

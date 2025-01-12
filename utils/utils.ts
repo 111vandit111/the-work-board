@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const gemeniResponse = async ({image, arrayOfString ,key} : {image : string , arrayOfString : string[] , key : string}) => {
-  const genAI = new GoogleGenerativeAI("AIzaSyA8x67CseMpIUl9ZT3ILLMTbxIze-JKtdQ");
+  const genAI = new GoogleGenerativeAI(key);
 
   const model = genAI.getGenerativeModel({ model: "models/gemini-1.5-pro" });
 
