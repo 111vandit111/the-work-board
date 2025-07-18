@@ -90,8 +90,10 @@ export default function Home() {
       const finalResult : any = [];
       (resp.candidates || []).forEach((data) => {
           data.content.parts.forEach((part) => {
+            const arrayString = part.text?.replace('```json\n', '')?.replace('\n```', '') || "[]";
+            console.log(JSON.parse(arrayString));
             finalResult.push(
-              ...JSON.parse(part.text?.replace('```json\n', '')?.replace('\n```', '') || "[]").map((item: any) => {
+              ...JSON.parse(arrayString).map((item: any) => {
                 setArray([...array , item.expr]);
                 return { [item.expr]: item.result };
               })

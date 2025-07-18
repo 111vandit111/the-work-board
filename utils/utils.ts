@@ -21,11 +21,13 @@ export const gemeniResponse = async ({image, arrayOfString ,key} : {image : stri
   
   3. Assigning values to variables like x = 4, y = 5, z = 6, etc.: In this case, assign values to variables and include the key 'assign': true in the output, structured as {'expr': 'variable name', 'result': 'assigned value', 'assign': true}. Return as an ARRAY OF OBJECTS.
   
-  4. Analyzing Graphical Math problems, which are word problems represented in drawing form, such as cars colliding, trigonometric problems, problems on the Pythagorean theorem, adding runs from a cricket wagon wheel, etc. These will have a drawing representing some scenario and accompanying information with the image. PAY CLOSE ATTENTION TO DIFFERENT COLORS FOR THESE PROBLEMS. Return the answer as a LIST OF ONE OBJECT {'expr': 'problem description', 'result': 'calculated answer'}.
+  4. Analyzing Graphical Math problems, which are word problems represented in drawing form, such as cars colliding, trigonometric problems, problems on the Pythagorean theorem, adding runs from a cricket wagon wheel, etc. These will have a drawing representing some scenario and accompanying information with the image. PAY CLOSE ATTENTION TO DIFFERENT COLORS FOR THESE PROBLEMS. Return the answer as an Array OF ONE OBJECT {'expr': 'problem description', 'result': 'calculated answer'}.
   
-  5. Detecting Abstract Concepts that a drawing might show, such as love, hate, jealousy, patriotism, or a historic reference to war, invention, discovery, quote, etc.: Use the same format as others to return the answer, where 'expr' will be the explanation of the drawing, and 'result' will be the abstract concept.
+  5. Detecting Abstract Concepts that a drawing might show, such as love, hate, jealousy, patriotism, or a historic reference to war, invention, discovery, quote, etc.: Use the same format as others to return the answer, where 'expr' will be the explanation of the drawing, and 'result' will be the abstract concept.Return as an ARRAY OF OBJECTS.
   
   so result is going to be something like this [{'expr': 'A', 'result': 40, 'assign': true}, {'expr': 'B', 'result': 30, 'assign': true}] so that it can be parsed with JSON.parse javascript method and then used in your code.
+
+  Never add it anything like "Here's my analysis of the image and the corresponding JSON output:" or anything like that it should be simple direct JSON output.
 
   Analyze the equation or expression in this image and return the answer according to the given rules. Make sure the output is strictly in a valid JavaScript JSON format, directly parsable using JSON.parse. Do not use backticks, markdown formatting, or unnecessary escaping. For example: [{'expr': 'A', 'result': 40, 'assign': true}, {'expr': 'B', 'result': 30, 'assign': true}]. Here is a dictionary of user-assigned variables. If the given expression has any of these variables, use its actual value from this dictionary accordingly: ${JSON.stringify(arrayOfString)}.`;
   
