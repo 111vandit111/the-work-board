@@ -91,7 +91,7 @@ export default function Home() {
       (resp.candidates || []).forEach((data) => {
           data.content.parts.forEach((part) => {
             finalResult.push(
-              ...JSON.parse(part.text || "[]").map((item: any) => {
+              ...JSON.parse(part.text?.replace('```json\n', '')?.replace('\n```', '') || "[]").map((item: any) => {
                 setArray([...array , item.expr]);
                 return { [item.expr]: item.result };
               })
