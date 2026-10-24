@@ -38,27 +38,44 @@ export default function Home() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
+  // Size the canvas to the viewport (and on rotate/resize), keeping existing drawing
   useEffect(() => {
-    const canvas = canvasRef.current;
-
-    if(canvas){
+    const fit = () => {
+      const canvas = canvasRef.current;
+      if(!canvas) return;
       const ctx = canvas.getContext("2d");
       if(!ctx) return;
+      const saved = canvas.width && canvas.height ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
+      canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      canvas.width = window.innerWidth - canvas.offsetTop;
-      canvas.style.background = "black";
+      if(saved) ctx.putImageData(saved, 0, 0);
       ctx.lineCap = "round";
-      ctx.lineWidth = 10;
-    }
+      ctx.lineJoin = "round";
+      ctx.lineWidth = window.innerWidth < 640 ? 6 : 10;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
   } , [])
 
-  const startDrawing = (e: React.MouseEvent) => {
+  const getPoint = (e: React.PointerEvent) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  const startDrawing = (e: React.PointerEvent) => {
     const canvas = canvasRef.current;
     if(!canvas) return;
     const ctx = canvas.getContext("2d");
     if(!ctx) return;
+    canvas.setPointerCapture(e.pointerId);
+    const { x, y } = getPoint(e);
+    ctx.strokeStyle = currColor;
     ctx.beginPath();
-    ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+    ctx.moveTo(x, y);
+    // dot on tap
+    ctx.lineTo(x + 0.01, y);
+    ctx.stroke();
     setIsDrawing(true);
   }
 
@@ -66,56 +83,52 @@ export default function Home() {
     setIsDrawing(false);
   }
 
-  const draw = (e: React.MouseEvent) => {
+  const draw = (e: React.PointerEvent) => {
     const canvas = canvasRef.current;
-    if(!canvas) return;
+    if(!canvas || !isDrawing) return;
     const ctx = canvas.getContext("2d");
     if(!ctx) return;
-    if(!isDrawing) return;
+    const { x, y } = getPoint(e);
     ctx.strokeStyle = currColor;
-    ctx.lineTo(e.pageX , e.pageY);
+    ctx.lineTo(x, y);
     ctx.stroke();
   }
 
   const sendData = () => {
-    setIsFetching(true);
     const canvas = canvasRef.current;
     if(!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if(!ctx) return;
-    const data = canvas.toDataURL("image/jpeg").replace(/^data:image\/jpeg;base64,/, "");
-    gemeniResponse({ image : data, arrayOfString : array , key : process.env.NEXT_PUBLIC_GEMINI_API || ""}).then((res) => {
-      const resp = res.response;
+    // JPEG has no alpha, so flatten onto black first or transparent pixels turn black-on-black unpredictably
+    const flat = document.createElement("canvas");
+    flat.width = canvas.width;
+    flat.height = canvas.height;
+    const fctx = flat.getContext("2d");
+    if(!fctx) return;
+    fctx.fillStyle = "black";
+    fctx.fillRect(0, 0, flat.width, flat.height);
+    fctx.drawImage(canvas, 0, 0);
+    const data = flat.toDataURL("image/jpeg").replace(/^data:image\/jpeg;base64,/, "");
+    setIsFetching(true);
+    gemeniResponse({ image : data, arrayOfString : array , key : process.env.NEXT_PUBLIC_GEMINI_API || ""}).then((answers) => {
       setIsFetching(false);
-      const finalResult : any = [];
-      (resp.candidates || []).forEach((data) => {
-          data.content.parts.forEach((part) => {
-            const arrayString = part.text?.replace('```json\n', '')?.replace('\n```', '') || "[]";
-            console.log(JSON.parse(arrayString));
-            finalResult.push(
-              ...JSON.parse(arrayString).map((item: any) => {
-                setArray([...array , item.expr]);
-                return { [item.expr]: item.result };
-              })
-            );
-          })
-      });
+      setArray((prev) => [...prev, ...answers.map((a) => a.expr)]);
+      setResult(answers.map((a) => ({ [a.expr]: a.result })));
       setShowModal(true);
-      setResult(finalResult);
     }).catch((err) => {
       setIsFetching(false);
       console.log(err);
+      setResult([{ "Error": "Couldn't read the drawing, please try again" }]);
+      setShowModal(true);
     });
   }
 
   return (
     <>
-   <canvas ref={canvasRef} onMouseDown={startDrawing} id="canvas" className="absolute top-0 left-0 w-full h-full" onMouseUp={finishDrawing} onMouseOut={finishDrawing} onMouseMove={draw}/>
+   <canvas ref={canvasRef} onPointerDown={startDrawing} onPointerMove={draw} onPointerUp={finishDrawing} onPointerCancel={finishDrawing} id="canvas" className="fixed top-0 left-0 w-full h-full bg-black touch-none"/>
 
-  { showModal && (<div className={`absolute top-2 right-10 z-40 overflow-y-auto  text-black bg-pink-400 text-xl text-bold w-80 h-80 ${result ? "" : "hidden"}`}>
+  { showModal && (<div className={`fixed top-2 right-2 sm:right-10 z-40 overflow-y-auto text-black bg-pink-400 text-base sm:text-xl font-bold w-[calc(100vw-1rem)] max-w-80 max-h-[50vh] sm:h-80 ${result ? "" : "hidden"}`}>
      
      <div className="flex justify-end px-3">
-     <button onClick={() => setShowModal(false)}>X</button>
+     <button className="p-2" onClick={() => setShowModal(false)}>X</button>
      </div>
 
       {result && !isFetching && 
@@ -139,7 +152,7 @@ export default function Home() {
 
    </div>)}
 
-   <div className="flex gap-2 z-20 relative mt-10 ml-4">
+   <div className="flex flex-wrap items-center gap-2 z-20 relative mt-3 sm:mt-10 mx-2 sm:ml-4 max-w-[calc(100vw-1rem)]">
    {
     COLOR_CAPS.map((color , index) => {
       return <ColorSelector key={index} color={color} onClick={() => setCurrColor(color)}/>
@@ -147,7 +160,7 @@ export default function Home() {
    }
    <Button onClick={() => setResetCanvas(true)} variant="danger">Reset</Button>
    <Button onClick={sendData} variant="success" disabled={isFetching}>Send</Button>
-   <Button onClick={() => setShowModal(true)} variant="warning">Show Current Result</Button>
+   <Button onClick={() => setShowModal(true)} variant="warning">Result</Button>
    </div>
    </>
   )

@@ -1,9 +1,46 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, Type } from "@google/genai";
 
-export const gemeniResponse = async ({image, arrayOfString ,key} : {image : string , arrayOfString : string[] , key : string}) => {
-  const genAI = new GoogleGenerativeAI(key);
+export const GEMINI_MODEL = "gemini-3.8-flash";
 
-  const model = genAI.getGenerativeModel({ model: "models/gemini-2.0-flash" });
+export type Answer = { expr: string; result: string; assign?: boolean };
+
+const responseSchema = {
+  type: Type.ARRAY,
+  items: {
+    type: Type.OBJECT,
+    properties: {
+      expr: { type: Type.STRING },
+      result: { type: Type.STRING },
+      assign: { type: Type.BOOLEAN },
+    },
+    required: ["expr", "result"],
+  },
+};
+
+// Models can still wrap JSON in fences or prose; pull out the first JSON array/object.
+export const parseAnswers = (text: string): Answer[] => {
+  const cleaned = text.replace(/```(?:json)?/gi, "").trim();
+  const candidates = [cleaned];
+  const arr = cleaned.match(/\[[\s\S]*\]/);
+  const obj = cleaned.match(/\{[\s\S]*\}/);
+  if (arr) candidates.push(arr[0]);
+  if (obj) candidates.push(obj[0]);
+  for (const c of candidates) {
+    try {
+      const parsed = JSON.parse(c);
+      if (Array.isArray(parsed) && parsed.length === 0) return [];
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      const valid = list.filter((i) => i && typeof i === "object" && "expr" in i && "result" in i);
+      if (valid.length) {
+        return valid.map((i) => ({ ...i, expr: String(i.expr), result: String(i.result) }));
+      }
+    } catch {}
+  }
+  throw new Error("Model returned an unusable response");
+};
+
+export const gemeniResponse = async ({image, arrayOfString ,key} : {image : string , arrayOfString : string[] , key : string}): Promise<Answer[]> => {
+  const ai = new GoogleGenAI({ apiKey: key });
 
   const prompt = `You have been given an image with some mathematical expressions, equations, or graphical problems, and you need to solve them. Note: Use the PEMDAS rule for solving mathematical expressions. PEMDAS stands for the Priority Order: Parentheses, Exponents, Multiplication and Division (from left to right), Addition and Subtraction (from left to right). Parentheses have the highest priority, followed by Exponents, then Multiplication and Division, and lastly Addition and Subtraction. 
 
@@ -24,23 +61,22 @@ export const gemeniResponse = async ({image, arrayOfString ,key} : {image : stri
   4. Analyzing Graphical Math problems, which are word problems represented in drawing form, such as cars colliding, trigonometric problems, problems on the Pythagorean theorem, adding runs from a cricket wagon wheel, etc. These will have a drawing representing some scenario and accompanying information with the image. PAY CLOSE ATTENTION TO DIFFERENT COLORS FOR THESE PROBLEMS. Return the answer as an Array OF ONE OBJECT {'expr': 'problem description', 'result': 'calculated answer'}.
   
   5. Detecting Abstract Concepts that a drawing might show, such as love, hate, jealousy, patriotism, or a historic reference to war, invention, discovery, quote, etc.: Use the same format as others to return the answer, where 'expr' will be the explanation of the drawing, and 'result' will be the abstract concept.Return as an ARRAY OF OBJECTS.
-  
-  so result is going to be something like this [{'expr': 'A', 'result': 40, 'assign': true}, {'expr': 'B', 'result': 30, 'assign': true}] so that it can be parsed with JSON.parse javascript method and then used in your code.
 
-  Never add it anything like "Here's my analysis of the image and the corresponding JSON output:" or anything like that it should be simple direct JSON output.
+  Analyze the equation or expression in this image and return the answer according to the rules above. Respond with a JSON array only, matching the provided schema: each item has "expr" (string), "result" (string) and optionally "assign" (true for variable assignments). If nothing solvable is visible, return an empty array. Here is a dictionary of user-assigned variables. If the given expression has any of these variables, use its actual value from this dictionary accordingly: ${JSON.stringify(arrayOfString)}.`;
 
-  Analyze the equation or expression in this image and return the answer according to the given rules. Make sure the output is strictly in a valid JavaScript JSON format, directly parsable using JSON.parse. Do not use backticks, markdown formatting, or unnecessary escaping. For example: [{'expr': 'A', 'result': 40, 'assign': true}, {'expr': 'B', 'result': 30, 'assign': true}]. Here is a dictionary of user-assigned variables. If the given expression has any of these variables, use its actual value from this dictionary accordingly: ${JSON.stringify(arrayOfString)}.`;
-  
-  
-  const result = await model.generateContent([
-    {
-      inlineData: {
-        data: image,
-        mimeType: "image/jpeg",
-      },
-    },
-    prompt,
-  ]);
-
-  return result;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 1500 * attempt));
+    try {
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [{ inlineData: { data: image, mimeType: "image/jpeg" } }, prompt],
+        config: { responseMimeType: "application/json", responseSchema },
+      });
+      return parseAnswers(response.text || "[]");
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
 };
